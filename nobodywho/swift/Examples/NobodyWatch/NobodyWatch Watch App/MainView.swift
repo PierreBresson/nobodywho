@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  MainView.swift
 //  NobodyWatch Watch App
 //
 //  Created by pierre on 20/03/2026.
@@ -8,21 +8,12 @@
 import SwiftUI
 import NobodyWho
 
-struct Message: Identifiable {
-    let id = UUID()
-    let role: Role
-    let content: String
-
-    enum Role {
-        case user, assistant
-    }
-}
-
-struct ContentView: View {
+struct MainView: View {
     @State private var messages: [Message] = []
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
-    @State private var errorMessage: String?
+    @State private var errorLoadingModel: Bool = false
+    @State private var errorMessage: String? = nil
     @State private var modelLoaded: Bool = false
     @State private var chat: Chat?
 
@@ -41,64 +32,78 @@ struct ContentView: View {
     }
 
     private var loadingView: some View {
-        VStack(spacing: 12) {
-            Button {
-                loadModel()
-            } label: {
-                Label("Load Model", systemImage: "cpu")
-            }
-            .disabled(isLoading)
+        Group {
+            if errorLoadingModel {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
 
-            if isLoading {
-                ProgressView()
-                    .padding(.top, 4)
-            }
+                    Text("Failed to load model. Please try again.")
+                        .font(.caption2)
+                        .multilineTextAlignment(.center)
 
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+                    Button {
+                        loadModel()
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                    }
+                }
+            } else {
+                VStack(spacing: 8) {
+                    ProgressView()
+
+                    Text("Loading…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .onAppear {
+                    loadModel()
+                }
             }
         }
-        .padding()
     }
 
     private var chatView: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        ForEach(messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
-                        }
-                        if isLoading {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 8)
-                            .id("loading")
-                        }
-                        if let errorMessage {
-                            Text(errorMessage)
-                                .font(.caption2)
-                                .foregroundStyle(.red)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 8)
-                        }
+                List {
+                    ForEach(messages) { message in
+                        MessageBubble(message: message)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .padding(.bottom, message.id == messages.last?.id ? 8 : 0)
+                            .id(message.id)
                     }
-                    .padding(.vertical, 8)
+                    if isLoading {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .id("loading")
+                    }
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 8)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    }
                 }
-                .onChange(of: messages.count) { _ in
+                .listStyle(.plain)
+                .onChange(of: messages.count) {
                     withAnimation {
                         proxy.scrollTo(messages.last?.id, anchor: .bottom)
                     }
                 }
-                .onChange(of: isLoading) { loading in
-                    if loading {
+                .onChange(of: isLoading) {
+                    if isLoading {
                         withAnimation {
                             proxy.scrollTo("loading", anchor: .bottom)
                         }
@@ -128,13 +133,14 @@ struct ContentView: View {
 
     private func loadModel() {
         isLoading = true
-        errorMessage = nil
+        errorLoadingModel = false
 
+        let path = modelPath
         Task.detached {
             do {
                 initLogging()
                 // useGpu: false — Metal is not available on watchOS
-                let model = try NobodyWho.loadModel(path: modelPath, useGpu: false)
+                let model = try NobodyWho.loadModel(path: path, useGpu: false)
                 let config = ChatConfig(
                     contextSize: 2048,
                     systemPrompt: "You are a helpful assistant running on Apple Watch. Keep answers very short."
@@ -148,7 +154,7 @@ struct ContentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Failed to load model: \(error.localizedDescription)"
+                    errorLoadingModel = true
                     isLoading = false
                 }
             }
@@ -181,22 +187,6 @@ struct ContentView: View {
     }
 }
 
-struct MessageBubble: View {
-    let message: Message
-
-    var body: some View {
-        Text(message.content)
-            .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(message.role == .user ? Color.blue : Color.gray.opacity(0.3))
-            .foregroundStyle(message.role == .user ? .white : .primary)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
-            .padding(.horizontal, 8)
-    }
-}
-
 #Preview {
-    ContentView()
+    MainView()
 }
