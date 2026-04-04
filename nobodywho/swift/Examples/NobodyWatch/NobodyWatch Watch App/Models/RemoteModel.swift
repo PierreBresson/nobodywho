@@ -1,0 +1,26 @@
+//
+//  RemoteModel.swift
+//  NobodyWatch Watch App
+//
+
+import Foundation
+
+struct RemoteModel: Decodable, Identifiable {
+    let id: Int
+    let name: String
+    let sizeMB: Int
+    let parameterCountMillions: Int
+    let developer: String
+    let fileName: String
+    let downloadURL: URL
+
+    enum CodingKeys: String, CodingKey {
+        case id = "modelId"
+        case name = "modelName"
+        case sizeMB = "modelSizeMB"
+        case parameterCountMillions
+        case developer
+        case fileName
+        case downloadURL
+    }
+}
